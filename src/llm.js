@@ -1,7 +1,7 @@
 export const ollamaConfig = {
     baseUrl: "http://localhost:11434",
-    model: "mistral:latest",
-    temperature: 0.7,
+    model: "llama3.1:8b-instruct-q6_K",
+    temperature: 0.1,
     maxRetries: 2
 };
 
