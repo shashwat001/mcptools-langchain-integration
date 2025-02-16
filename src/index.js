@@ -25,7 +25,7 @@ async function main() {
         const messages = [new HumanMessage(userQuery)];
 
         const aiMessage = await llmWithTools.invoke(messages);
-        // debug('LLM response', aiMessage);
+        debug('LLM response', aiMessage);
         messages.push(aiMessage);
 
         if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
