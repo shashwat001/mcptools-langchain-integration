@@ -14,6 +14,8 @@ function createSchemaModel(inputSchema) {
         throw new Error("Invalid schema type or missing properties");
     }
 
+    console.log("Inputschema: ", inputSchema)
+
     const schemaProperties = Object.entries(inputSchema.properties).reduce((acc, [key, value]) => {
         // Map JSON Schema types to Zod types
         switch (value.type) {
@@ -42,23 +44,32 @@ function createSchemaModel(inputSchema) {
 
 export async function createMcpTool(client, mcpTool) {
     return tool(
-        async (input) => {
-            debug('Calling MCP tool', input);
-            const result = await client.request(
-                {
-                    method: 'tools/call',
-                    params: {
-                        name: mcpTool.name,
-                        arguments: input,
-                    },
-                },
-                CallToolResultSchema,
-            );
-            debug('MCP tool response', result);
-            return {
-                content: result.content[0].text,
-                tool_call_id: input.id,
-                status: 'success',
+    async (toolCall) => {
+    debug('Calling MCP tool - Input:', toolCall);
+    
+    // For direct tool calls, toolCall will be the arguments
+    // For tool invocations from LLM, toolCall will be the full tool call object
+    const toolCallId = toolCall.id;
+    const args = toolCall.args || {};
+    
+    debug('Tool ID:', toolCallId);
+    debug('Tool Args:', args);
+    
+    const result = await client.request(
+    {
+    method: 'tools/call',
+    params: {
+            name: mcpTool.name,
+            arguments: args,
+            },
+        },
+        CallToolResultSchema,
+    );
+    debug('MCP tool response', result);
+    return {
+    content: result.content[0].text,
+    tool_call_id: toolCallId,
+        status: 'success',
                 _getType: () => 'tool',
                 lc_direct_tool_output: true
             }

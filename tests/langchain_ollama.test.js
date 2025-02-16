@@ -72,7 +72,7 @@ describe('Langchain Ollama Integration', () => {
             type: 'tool_call'
         };
 
-        const result = await tool.call({ toolCallArgs });
+        const result = await tool.call(toolCallArgs);
 
         expect(result).toEqual({
             content: mockToolResponse.content[0].text,
