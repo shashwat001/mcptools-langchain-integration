@@ -34,9 +34,6 @@ function createSchemaModel(inputSchema) {
         }
         return acc;
     }, {});
-
-    schemaProperties.id = z.string().optional();
-
     return z.object(schemaProperties);
 }
 
@@ -45,17 +42,12 @@ export async function createMcpTool(client, mcpTool) {
         async (toolCall) => {
             debug('Calling MCP tool - Input:', toolCall);
 
-            // For direct tool calls, toolCall will be the arguments
-            // For tool invocations from LLM, toolCall will be the full tool call object
-            const toolCallId = toolCall.id;
-            const args = toolCall.args || {};
-
             const result = await client.request(
                 {
                     method: 'tools/call',
                     params: {
                         name: mcpTool.name,
-                        arguments: args,
+                        arguments: toolCall,
                     },
                 },
                 CallToolResultSchema,
@@ -63,7 +55,7 @@ export async function createMcpTool(client, mcpTool) {
             debug('MCP tool response', result);
             return {
                 content: result.content[0].text,
-                tool_call_id: toolCallId,
+                tool_call_id: 'toolCallId',
                 status: 'success',
                 _getType: () => 'tool',
                 lc_direct_tool_output: true

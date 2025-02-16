@@ -4,6 +4,23 @@ import { ollamaConfig, systemPromptForTools } from './llm.js';
 import { createMcpClient, fetchMcpTools } from './mcp.js';
 import { debug } from './debug.js';
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
+import readline from 'readline';
+
+async function createChatInterface() {
+    return readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: true
+    });
+}
+
+async function askQuestion(rl, question) {
+    return new Promise((resolve) => {
+        rl.question(question, (answer) => {
+            resolve(answer);
+        });
+    });
+}
 
 const promptTemplate = ChatPromptTemplate.fromMessages([
     ["system", systemPromptForTools],
@@ -26,36 +43,50 @@ async function main() {
     const ollama = new ChatOllama(ollamaConfig);
     const llmWithTools = ollama.bindTools(mcpTools);
 
+    const rl = await createChatInterface();
     const messages = [];
 
+    console.log('Chat session started. Press Ctrl+D to exit.');
+    console.log('----------------------------------------');
+
     try {
-        const userQuery = "Can you list the directories which you can access on my system?";
-
-        console.log('\n[LLM] User query:', userQuery);
-        messages.push(new HumanMessage(userQuery));
-
-        const formattedPrompt = await promptTemplate.formatMessages({
-            chat_history: messages
-        });
-        console.log("Formatted Prompt: ", formattedPrompt)
-
-        const aiMessage = await llmWithTools.invoke(formattedPrompt);
-        debug('LLM response', aiMessage);
-        messages.push(aiMessage);
-
-        if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
-            for (const toolCall of aiMessage.tool_calls) {
-                console.log("Toolcall is ", toolCall);
-                const selectedTool = toolsByName[toolCall.name];
-                if (selectedTool) {
-                    const toolMessage = await selectedTool.invoke(toolCall);
-                    debug('Tool execution result', toolMessage);
-                    messages.push(toolMessage);
-                }
+        while (true) {
+            const userQuery = await askQuestion(rl, 'You: ');
+            if (userQuery === null || userQuery === undefined) {
+                // Ctrl+D was pressed
+                break;
             }
 
-            const response = await llmWithTools.invoke(messages);
-            debug('Final LLM response', response);
+            console.log('\n[LLM] User query:', userQuery);
+            messages.push(new HumanMessage(userQuery));
+
+            const formattedPrompt = await promptTemplate.formatMessages({
+                chat_history: messages
+            });
+            console.log("Formatted Prompt: ", formattedPrompt)
+
+            const aiMessage = await llmWithTools.invoke(formattedPrompt);
+            debug('LLM response', aiMessage);
+            messages.push(aiMessage);
+
+            if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
+                for (const toolCall of aiMessage.tool_calls) {
+                    console.log("Toolcall is ", toolCall);
+                    const selectedTool = toolsByName[toolCall.name];
+                    if (selectedTool) {
+                        const toolMessage = await selectedTool.invoke(toolCall.args);
+                        debug('Tool execution result', toolMessage);
+                        messages.push(toolMessage);
+                    }
+                }
+
+                const response = await llmWithTools.invoke(messages);
+                messages.push(response)
+                debug('Final LLM response', response);
+            } else {
+                console.log('Assistant:', aiMessage.content);
+            }
+
         }
 
     } catch (error) {
