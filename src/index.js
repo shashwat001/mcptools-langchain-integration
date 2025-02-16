@@ -1,12 +1,12 @@
 import { ChatOllama } from "@langchain/ollama";
 import { HumanMessage } from "@langchain/core/messages";
-import { ollamaConfig } from './llm.js';
+import { ollamaConfig, systemPromptForTools } from './llm.js';
 import { createMcpClient, fetchMcpTools } from './mcp.js';
 import { debug } from './debug.js';
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 
 const promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", "In this environment you have access to a set of tools you can use to answer the user's question.\n Don't ask user to execute the functions and decide yourself whether to call the tool or not.\nNever call more than one tool at a time."],
+    ["system", systemPromptForTools],
     new MessagesPlaceholder("chat_history")
 ]);
 
