@@ -2,7 +2,7 @@ export const systemPromptForTools = "In this environment you have access to a se
 
 export const ollamaConfig = {
     baseUrl: "http://localhost:11434",
-    model: "llama3.1:8b-instruct-q6_K",
+    model: "llama3.2:3b-instruct-q8_0",
     temperature: 0.1,
     maxRetries: 2
 };

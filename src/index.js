@@ -1,5 +1,5 @@
 import { ChatOllama } from "@langchain/ollama";
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { ollamaConfig, systemPromptForTools } from './llm.js';
 import { createMcpClient, fetchMcpTools } from './mcp.js';
 import { debug } from './debug.js';
@@ -26,6 +26,17 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
     ["system", systemPromptForTools],
     new MessagesPlaceholder("chat_history")
 ]);
+
+async function getPromptWithHistory(messages, newMessage) {
+    if (newMessage) {
+        messages.push(newMessage);
+    }
+    const formattedPrompt = await promptTemplate.formatMessages({
+        chat_history: messages
+    });
+    console.log("Formatted Prompt: ", formattedPrompt);
+    return formattedPrompt;
+}
 
 async function main() {
     // Initialize MCP client
@@ -58,14 +69,8 @@ async function main() {
             }
 
             console.log('\n[LLM] User query:', userQuery);
-            messages.push(new HumanMessage(userQuery));
 
-            const formattedPrompt = await promptTemplate.formatMessages({
-                chat_history: messages
-            });
-            console.log("Formatted Prompt: ", formattedPrompt)
-
-            const aiMessage = await llmWithTools.invoke(formattedPrompt);
+            const aiMessage = await llmWithTools.invoke((await getPromptWithHistory(messages, new HumanMessage(userQuery))));
             debug('LLM response', aiMessage);
             messages.push(aiMessage);
 
@@ -77,10 +82,14 @@ async function main() {
                         const toolMessage = await selectedTool.invoke(toolCall.args);
                         debug('Tool execution result', toolMessage);
                         messages.push(toolMessage);
+                    } else {
+                        const noToolMessage = new ToolMessage(`No such "${toolCall.name}" exists.`);
+                        debug('No tool found message', noToolMessage);
+                        messages.push(noToolMessage);
                     }
                 }
 
-                const response = await llmWithTools.invoke(messages);
+                const response = await llmWithTools.invoke(await getPromptWithHistory(messages));
                 messages.push(response)
                 debug('Final LLM response', response);
             } else {

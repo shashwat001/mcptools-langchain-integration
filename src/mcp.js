@@ -8,6 +8,7 @@ import {
     CallToolResultSchema,
     ListToolsResultSchema
 } from "@modelcontextprotocol/sdk/types.js";
+import { ToolMessage } from "@langchain/core/messages";
 
 function createSchemaModel(inputSchema) {
     if (inputSchema.type !== "object" || !inputSchema.properties) {
@@ -53,13 +54,13 @@ export async function createMcpTool(client, mcpTool) {
                 CallToolResultSchema,
             );
             debug('MCP tool response', result);
-            return {
+            return new ToolMessage({
                 content: result.content[0].text,
                 tool_call_id: 'toolCallId',
                 status: 'success',
                 _getType: () => 'tool',
                 lc_direct_tool_output: true
-            }
+            });
         },
         {
             name: mcpTool.name,
