@@ -83,7 +83,10 @@ async function main() {
                         debug('Tool execution result', toolMessage);
                         messages.push(toolMessage);
                     } else {
-                        const noToolMessage = new ToolMessage(`No such "${toolCall.name}" exists.`);
+                        const noToolMessage = new ToolMessage({
+                            content: `No such "${toolCall.name}" exists.`,
+                            tool_call_id: toolCall.id
+                        });
                         debug('No tool found message', noToolMessage);
                         messages.push(noToolMessage);
                     }
