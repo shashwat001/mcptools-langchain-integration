@@ -38,17 +38,34 @@ function createSchemaModel(inputSchema) {
     return z.object(schemaProperties);
 }
 
+/** 
+ * Sample config object received
+{
+  tags: [],
+  metadata: { tool_call_id: 'db0a0bc3-c121-4c30-a0dc-e50681325606' },
+  recursionLimit: 25,
+  runId: undefined,
+  toolCall: {
+    name: 'list_directory',
+    args: { path: '/home/shashwat/Projects' },
+    id: 'db0a0bc3-c121-4c30-a0dc-e50681325606',
+    type: 'tool_call'
+  },
+  configurable: { tool_call_id: 'db0a0bc3-c121-4c30-a0dc-e50681325606' },
+  runName: 'list_directory'
+}
+ */
 export async function createMcpTool(client, mcpTool) {
     return tool(
-        async (toolCall) => {
-            debug('Calling MCP tool - Input:', toolCall);
-
+        async (toolArgs, config) => {
+            debug('Calling MCP tool');
+            const toolCallId = config?.configurable?.tool_call_id;
             const result = await client.request(
                 {
                     method: 'tools/call',
                     params: {
                         name: mcpTool.name,
-                        arguments: toolCall,
+                        arguments: toolArgs,
                     },
                 },
                 CallToolResultSchema,
@@ -56,7 +73,7 @@ export async function createMcpTool(client, mcpTool) {
             debug('MCP tool response', result);
             return new ToolMessage({
                 content: result.content[0].text,
-                tool_call_id: 'toolCallId',
+                tool_call_id: toolCallId,
                 status: 'success',
                 _getType: () => 'tool',
                 lc_direct_tool_output: true

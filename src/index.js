@@ -55,7 +55,7 @@ async function main() {
     const llmWithTools = ollama.bindTools(mcpTools);
 
     const rl = await createChatInterface();
-    const messages = [];
+    const messages = new Array()
 
     console.log('Chat session started. Press Ctrl+D to exit.');
     console.log('----------------------------------------');
@@ -70,16 +70,16 @@ async function main() {
 
             console.log('\n[LLM] User query:', userQuery);
 
-            const aiMessage = await llmWithTools.invoke((await getPromptWithHistory(messages, new HumanMessage(userQuery))));
+            let aiMessage = await llmWithTools.invoke((await getPromptWithHistory(messages, new HumanMessage(userQuery))));
             debug('LLM response', aiMessage);
             messages.push(aiMessage);
 
-            if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
+            while (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
                 for (const toolCall of aiMessage.tool_calls) {
                     console.log("Toolcall is ", toolCall);
                     const selectedTool = toolsByName[toolCall.name];
                     if (selectedTool) {
-                        const toolMessage = await selectedTool.invoke(toolCall.args);
+                        const toolMessage = await selectedTool.invoke(toolCall);
                         debug('Tool execution result', toolMessage);
                         messages.push(toolMessage);
                     } else {
@@ -89,12 +89,11 @@ async function main() {
                     }
                 }
 
-                const response = await llmWithTools.invoke(await getPromptWithHistory(messages));
-                messages.push(response)
-                debug('Final LLM response', response);
-            } else {
-                console.log('Assistant:', aiMessage.content);
+                aiMessage = await llmWithTools.invoke(await getPromptWithHistory(messages));
+                messages.push(aiMessage)
+                console.log('Final LLM response', aiMessage);
             }
+            console.log('Assistant:', aiMessage.content);
 
         }
 
