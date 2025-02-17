@@ -91,7 +91,7 @@ export async function createMcpTool(client: Client, mcpTool: McpToolType): Promi
                 },
                 CallToolResultSchema,
             );
-            debug('MCP tool response', result);
+            // debug('MCP tool response', result);
             return new ToolMessage({
                 content: result.content[0].text as string,
                 tool_call_id: toolCallId || "default_id",

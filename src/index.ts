@@ -35,10 +35,19 @@ async function getPromptWithHistory(messages: BaseMessage[], newMessage?: BaseMe
     const formattedPrompt = await promptTemplate.formatMessages({
         chat_history: messages
     });
-    console.log("Formatted Prompt: ", formattedPrompt);
+    // console.log("Formatted Prompt: ", formattedPrompt);
     return formattedPrompt;
 }
 
+const printStreamingToken = {
+    callbacks: [
+        {
+            handleLLMNewToken(token: string) {
+                process.stdout.write(token);
+            },
+        },
+    ],
+};
 async function main() {
     // Initialize MCP client
     const mcpClient = await createMcpClient();
@@ -63,44 +72,39 @@ async function main() {
     try {
         while (true) {
             const userQuery = await askQuestion(rl, 'You: ');
-            console.log('\n[LLM] User query:', userQuery);
             if (userQuery === null || userQuery === undefined) {
                 // Ctrl+D was pressed
                 break;
             }
 
             let aiMessage = await llmWithTools.invoke(
-                await getPromptWithHistory(messages, new HumanMessage(userQuery))
+                await getPromptWithHistory(messages, new HumanMessage(userQuery)),
+                printStreamingToken
             ) as AIMessage;
 
-            debug('LLM response', aiMessage);
             messages.push(aiMessage);
 
             while (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
                 for (const toolCall of aiMessage.tool_calls as ToolCall[]) {
-                    console.log("Toolcall is ", toolCall);
                     const selectedTool = toolsByName[toolCall.name];
                     if (selectedTool) {
-                        const toolMessage = await selectedTool.invoke(toolCall);
-                        debug('Tool execution result', toolMessage);
+                        const toolMessage = await selectedTool.invoke(toolCall, printStreamingToken);
                         messages.push(toolMessage);
                     } else {
                         const noToolMessage = new ToolMessage({
                             content: `No such "${toolCall.name}" exists.`,
                             tool_call_id: toolCall.id || "default_id"
                         });
-                        debug('No tool found message', noToolMessage);
                         messages.push(noToolMessage);
                     }
                 }
 
                 aiMessage = await llmWithTools.invoke(
-                    await getPromptWithHistory(messages)
+                    await getPromptWithHistory(messages), printStreamingToken
                 ) as AIMessage;
 
                 messages.push(aiMessage);
             }
-            console.log('Assistant:', aiMessage.content);
         }
     } catch (error) {
         console.error("Error:", error);
