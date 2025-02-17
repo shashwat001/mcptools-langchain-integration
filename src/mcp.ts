@@ -2,20 +2,31 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport, SseError } from "@modelcontextprotocol/sdk/client/sse.js";
 import { mcpConfig } from './llm.js';
 import { debug } from './debug.js';
-import { tool } from "@langchain/core/tools";
+import { tool, StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
     CallToolResultSchema,
-    ListToolsResultSchema
+    ListToolsResultSchema,
+    Tool as McpToolType
 } from "@modelcontextprotocol/sdk/types.js";
 import { ToolMessage } from "@langchain/core/messages";
 
-function createSchemaModel(inputSchema) {
+interface JsonSchemaProperty {
+    type: string;
+    [key: string]: unknown;
+}
+
+interface JsonSchema {
+    type: string;
+    properties?: Record<string, JsonSchemaProperty>;
+}
+
+function createSchemaModel(inputSchema: JsonSchema): z.ZodObject<any> {
     if (inputSchema.type !== "object" || !inputSchema.properties) {
         throw new Error("Invalid schema type or missing properties");
     }
 
-    const schemaProperties = Object.entries(inputSchema.properties).reduce((acc, [key, value]) => {
+    const schemaProperties: Record<string, z.ZodTypeAny> = Object.entries(inputSchema.properties).reduce((acc, [key, value]) => {
         // Map JSON Schema types to Zod types
         switch (value.type) {
             case 'number':
@@ -34,7 +45,8 @@ function createSchemaModel(inputSchema) {
                 acc[key] = z.any();
         }
         return acc;
-    }, {});
+    }, {} as Record<string, z.ZodTypeAny>);
+
     return z.object(schemaProperties);
 }
 
@@ -55,10 +67,19 @@ function createSchemaModel(inputSchema) {
   runName: 'list_directory'
 }
  */
-export async function createMcpTool(client, mcpTool) {
+
+interface ToolConfig {
+    configurable?: {
+        tool_call_id?: string;
+    };
+}
+
+export type McpTool = StructuredTool;
+
+export async function createMcpTool(client: Client, mcpTool: McpToolType): Promise<McpTool> {
     return tool(
-        async (toolArgs, config) => {
-            debug('Calling MCP tool');
+        async (toolArgs: Record<string, unknown>, config?: ToolConfig) => {
+            // debug('Calling MCP tool');
             const toolCallId = config?.configurable?.tool_call_id;
             const result = await client.request(
                 {
@@ -72,31 +93,37 @@ export async function createMcpTool(client, mcpTool) {
             );
             debug('MCP tool response', result);
             return new ToolMessage({
-                content: result.content[0].text,
-                tool_call_id: toolCallId,
+                content: result.content[0].text as string,
+                tool_call_id: toolCallId || "default_id",
                 status: 'success',
-                _getType: () => 'tool',
-                lc_direct_tool_output: true
             });
         },
         {
             name: mcpTool.name,
             description: mcpTool.description || `Tool for ${mcpTool.name}`,
-            schema: createSchemaModel(mcpTool.inputSchema),
+            schema: createSchemaModel(mcpTool.inputSchema as JsonSchema),
         }
     );
 }
 
-
-export async function createMcpClient() {
+export async function createMcpClient(): Promise<Client> {
     const mcpClient = new Client(
-        mcpConfig.clientInfo,
-        { capabilities: {} }
+        {
+            name: "ollama-client",
+            version: "1.0.0"
+        },
+        {
+            capabilities: {
+                prompts: {},
+                resources: {},
+                tools: {}
+            }
+        }
     );
 
     const transport = new SSEClientTransport(new URL(mcpConfig.serverUrl), {
         eventSourceInit: {
-            fetch: (url, init) => fetch(url, {
+            fetch: (url: URL | RequestInfo, init?: RequestInit) => fetch(url, {
                 ...init,
                 headers: {
                     ...init?.headers,
@@ -126,14 +153,13 @@ export async function createMcpClient() {
     }
 }
 
-export async function fetchMcpTools(mcpClient) {
+export async function fetchMcpTools(mcpClient: Client): Promise<McpTool[]> {
     const toolsAvailable = await mcpClient.request(
         { method: 'tools/list' },
         ListToolsResultSchema
     );
     // debug('Available MCP tools', toolsAvailable);
 
-    // Create Langchain tools from MCP tools
     console.log('\n[MCP] Creating Langchain tools from MCP tools...');
     const mcpTools = await Promise.all(
         toolsAvailable.tools.map(mcpTool => createMcpTool(mcpClient, mcpTool))
